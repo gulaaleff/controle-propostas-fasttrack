@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pré-Vendas · Fast Track SEIDOR</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%233b82f6'/><path d='M8 22V10h10v3h-7v2h6v3h-6v4z' fill='white'/></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="overlay">
+  <form class="box" id="loginForm" autocomplete="on">
+    <h2>Pré-Vendas · Fast Track</h2>
+    <p class="mut" id="loginMsg">Entre com seu e-mail e senha.</p>
+    <input type="email" id="lgEmail" placeholder="e-mail" required autocomplete="username">
+    <input type="password" id="lgPass" placeholder="senha" required autocomplete="current-password" minlength="6">
+    <button type="submit" class="btn primary" id="lgBtn">Entrar</button>
+    <div class="lglinks">
+      <a href="#" id="lgSignup">Criar acesso</a>
+      <a href="#" id="lgReset">Esqueci a senha</a>
+    </div>
+  </form>
+</div>
+
+<!-- SEM PERMISSÃO -->
+<div id="noAccess" class="overlay" style="display:none">
+  <div class="box">
+    <h2>Acesso não liberado</h2>
+    <p class="mut">O e-mail <b id="naEmail"></b> entrou, mas não está na lista de usuários permitidos. Peça para incluir o e-mail na tabela <code>usuarios_permitidos</code>.</p>
+    <button class="btn" onclick="App.logout()">Sair</button>
+  </div>
+</div>
+
+<header>
+  <div>
+    <h1>Pré-Vendas · Fast Track SEIDOR</h1>
+    <div class="sub">Controle de Propostas em Andamento · dados no Supabase, sincronizados com a planilha</div>
+  </div>
+  <div class="htools">
+    <div class="tabs" id="tabs">
+      <button data-v="dash" class="on">Dashboard</button>
+      <button data-v="pend">Pendências</button>
+      <button data-v="lost">Perdas</button>
+      <button data-v="kb">Kanban</button>
+      <button data-v="hist">Histórico</button>
+    </div>
+    <button class="btn primary" id="newBtn">+ Nova proposta</button>
+    <div class="badge" id="stamp">—</div>
+    <button class="btn ghost" id="userBtn" title="Sair">⎋</button>
+  </div>
+</header>
+
+<div class="filters" id="filters"></div>
+
+<!-- DASHBOARD -->
+<section id="v-dash">
+  <div class="kpis" id="kpis"></div>
+  <div class="grid">
+    <div class="card span8"><h3>Propostas recebidas por mês <span class="mut n">(recebimento vs. ganhos)</span></h3><div class="cw"><canvas id="cMes"></canvas></div></div>
+    <div class="card span4"><h3>Funil de propostas <span class="mut n">· execução = Novo/Em Andam./Revisão</span></h3><div class="cw"><canvas id="cFunil"></canvas></div></div>
+    <div class="card span4"><h3>Motivos de perda</h3><div class="cw"><canvas id="cPerda"></canvas></div></div>
+    <div class="card span4"><h3>Valor por Status BID (R$)</h3><div class="cw"><canvas id="cValor"></canvas></div></div>
+    <div class="card span4"><h3>Propostas por tipo de demanda</h3><div class="cw"><canvas id="cDemanda"></canvas></div></div>
+    <div class="card span6"><h3>Top comerciais (nº de propostas)</h3><div class="cw"><canvas id="cComercial"></canvas></div></div>
+    <div class="card span6"><h3>Top módulos SAP demandados</h3><div class="cw"><canvas id="cModulo"></canvas></div></div>
+  </div>
+  <div class="card">
+    <div class="cardhead"><h3>Propostas <span id="tblCount" class="mut n"></span></h3><span class="mut n">clique numa linha para editar</span></div>
+    <div class="tblwrap"><table><thead><tr id="thead"></tr></thead><tbody id="tbody"></tbody></table></div>
+  </div>
+</section>
+
+<!-- PENDÊNCIAS -->
+<section id="v-pend" style="display:none">
+  <div class="kpis" id="pendKpis"></div>
+  <div class="grid">
+    <div class="card span6"><h3>Atividades pendentes <span class="mut n" id="pAtivCount"></span></h3><div class="list" id="pAtiv"></div></div>
+    <div class="card span6"><h3>Follow-ups sugeridos <span class="mut n">· entregue há até 90 dias, em aberto, sem retorno</span></h3>
+      <div class="inline"><label>Sem movimento há pelo menos <input type="number" id="fuDias" value="7" min="1" max="120"> dias</label></div>
+      <div class="list" id="pFollow"></div></div>
+    <div class="card span6"><h3>Em elaboração (Novo / Em Andamento) <span class="mut n" id="pElabCount"></span></h3><div class="list" id="pElab"></div></div>
+    <div class="card span6"><h3>Prazos das propostas em elaboração <span class="mut n">· vencidos nos últimos 30 dias ou nos próximos 3</span></h3><div class="list" id="pPrazo"></div></div>
+  </div>
+</section>
+
+<!-- PERDAS -->
+<section id="v-lost" style="display:none">
+  <div class="kpis" id="lostKpis"></div>
+  <div class="grid">
+    <div class="card span5"><h3>Motivos de perda</h3><div class="cw"><canvas id="cPerdaTab"></canvas></div></div>
+    <div class="card span7"><h3>Perdas por comercial</h3><div class="cw"><canvas id="cPerdaCom"></canvas></div></div>
+  </div>
+  <div class="card">
+    <h3>Detalhamento das perdas <span id="lostCount" class="mut n"></span></h3>
+    <div class="tblwrap"><table><thead><tr><th>Cliente</th><th>Projeto</th><th>Valor</th><th>Comercial</th><th>Perdido em</th><th>Motivo</th><th>Observação</th></tr></thead><tbody id="lostBody"></tbody></table></div>
+  </div>
+</section>
+
+<!-- KANBAN -->
+<section id="v-kb" style="display:none">
+  <div class="kbbar">
+    <label class="flabel">Agrupar por
+      <select id="kbGroup">
+        <option value="status_bid">Status BID</option>
+        <option value="status">Status PV</option>
+        <option value="prioridade">Priorização</option>
+        <option value="comercial">Comercial</option>
+        <option value="arquiteto">Arquiteto</option>
+      </select>
+    </label>
+    <label class="flabel">Mostrar
+      <select id="kbScope">
+        <option value="ativas">Só ativas (esconde Concluído/Cancelado sem negociação)</option>
+        <option value="todas">Todas</option>
+      </select>
+    </label>
+    <div class="mut n">Arraste um card para outra coluna para gravar a mudança.</div>
+  </div>
+  <div class="board" id="board"></div>
+</section>
+
+<!-- HISTÓRICO -->
+<section id="v-hist" style="display:none">
+  <div class="card">
+    <div class="cardhead"><h3>Últimas alterações</h3><button class="btn" id="histReload">↻ Recarregar</button></div>
+    <div class="tblwrap tall"><table><thead><tr><th>Quando</th><th>Proposta</th><th>Origem</th><th>Usuário</th><th>Alterações</th></tr></thead><tbody id="histBody"></tbody></table></div>
+  </div>
+</section>
+
+<!-- EDITOR -->
+<div id="drawer" class="drawer" aria-hidden="true">
+  <div class="dhead">
+    <div><h3 id="edTitle">Proposta</h3><div class="mut n" id="edSub"></div></div>
+    <button class="btn ghost" id="edClose">✕</button>
+  </div>
+  <form id="edForm" class="dbody"></form>
+  <div class="dfoot">
+    <button class="btn" id="edCancel" type="button">Cancelar</button>
+    <button class="btn primary" id="edSave" type="button">Salvar</button>
+  </div>
+</div>
+
+<!-- CHAT -->
+<button id="chatFab" title="Chat">💬</button>
+<div id="chat" class="chat" aria-hidden="true">
+  <div class="chead"><b>Assistente de propostas</b><span class="mut n">comandos em português · digite <i>ajuda</i></span><button class="btn ghost" id="chatClose">✕</button></div>
+  <div class="cmsgs" id="chatMsgs"></div>
+  <form class="cinput" id="chatForm"><input id="chatIn" placeholder="ex.: marcar CCPR rollouts como ganho" autocomplete="off"><button class="btn primary">Enviar</button></form>
+</div>
+
+<div id="toast"></div>
+
+<script src="app.js"></script>
+<script src="chat.js"></script>
+</body>
+</html>

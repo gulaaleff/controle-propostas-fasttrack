@@ -33,6 +33,8 @@ const FIELDS = [
   ['consultores', 'Consultores', 'text'],
   ['modulos', 'Módulos', 'text'],
   ['obs', 'OBS', 'textarea'],
+  ['lembrete_em', 'Lembrete em', 'date'],
+  ['lembrete_nota', 'Nota do lembrete', 'textarea'],
 ];
 const FMAP = Object.fromEntries(FIELDS.map(f => [f[0], f]));
 const LISTS = {
@@ -121,6 +123,8 @@ async function onLogin() {
   if (!perm) { $('naEmail').textContent = USER.email; $('noAccess').style.display = 'flex'; return; }
   await load();
   subscribe();
+  iniciarSync();
+  window.App.onLoad.forEach(f => { try { f(); } catch (e) { console.error(e); } });
 }
 
 // ---------- Dados ----------
@@ -217,8 +221,8 @@ function filtered() {
 function setView(v) {
   VIEW = v;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  ['dash', 'pend', 'lost', 'kb', 'hist'].forEach(x => $('v-' + x).style.display = x === v ? 'block' : 'none');
-  $('filters').style.display = v === 'hist' ? 'none' : 'flex';
+  ['dash', 'tabela', 'pend', 'lost', 'kb', 'alertas', 'hist'].forEach(x => $('v-' + x).style.display = x === v ? 'block' : 'none');
+  $('filters').style.display = ['hist', 'alertas', 'tabela'].includes(v) ? 'none' : 'flex';
   render();
 }
 let CH = {};
@@ -230,7 +234,10 @@ function render() {
   else if (VIEW === 'pend') renderPend(rows);
   else if (VIEW === 'lost') renderLost(rows);
   else if (VIEW === 'kb') renderKanban(rows);
+  else if (VIEW === 'tabela' && window.Tabela) window.Tabela.render();
   else if (VIEW === 'hist') renderHist();
+  else if (VIEW === 'alertas' && window.Alertas) window.Alertas.render();
+  if (window.Alertas) window.Alertas.atualizarContador();
 }
 function kpiHtml(list) { return list.map(a => '<div class="kpi"><div class="bar" style="background:' + a[3] + '"></div><div class="lbl">' + a[0] + '</div><div class="val">' + a[1] + '</div><div class="foot">' + a[2] + '</div></div>').join(''); }
 const sumV = arr => arr.reduce((s, d) => s + (d.valor || 0), 0);
@@ -411,7 +418,7 @@ function openEditor(id, preset) {
   EDIT = id || null;
   $('edTitle').textContent = id ? (d.cliente || 'Proposta') : 'Nova proposta';
   $('edSub').textContent = id ? (d.projeto || '') + (d.excel_row ? ' · linha ' + d.excel_row + ' da planilha' : ' · ainda não está na planilha') : 'Vai para a planilha na próxima sincronização';
-  const sections = { cliente: 'Identificação', prioridade: 'Situação', valor: 'Comercial', atividades: 'Acompanhamento', data_prevista: 'Datas', consultores: 'Equipe' };
+  const sections = { cliente: 'Identificação', prioridade: 'Situação', valor: 'Comercial', atividades: 'Acompanhamento', data_prevista: 'Datas', consultores: 'Equipe', lembrete_em: 'Lembrete' };
   const dl = k => { const vals = uniq(k); return vals.length ? '<datalist id="dl_' + k + '">' + vals.map(v => '<option value="' + esc(v) + '">').join('') + '</datalist>' : ''; };
   $('edForm').innerHTML = FIELDS.map(([k, lbl, t, lst]) => {
     let h = sections[k] ? '<div class="sec">' + sections[k] + '</div>' : '';
@@ -464,8 +471,67 @@ document.addEventListener('click', e => {
 });
 $('tabs').onclick = e => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); };
 
-// ---------- API p/ chat ----------
-window.App = { sb, get data() { return DATA; }, FIELDS, FMAP, LISTS, update, insert, openEditor, setView, toast, esc, BRL, fmtDate, today, daysBetween, label, logout, ACTIVE_STATUS };
+
+// ---------- Sincronização com a planilha ----------
+let SYNC = null, syncCanal = null, pedidoAtual = null;
+function tempoRel(iso) {
+  if (!iso) return 'nunca';
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return 'há ' + min + ' min';
+  const h = Math.round(min / 60);
+  if (h < 24) return 'há ' + h + 'h';
+  return 'há ' + Math.round(h / 24) + 'd';
+}
+function pintaSync() {
+  const el = $('syncStamp'), btn = $('syncBtn');
+  if (pedidoAtual && ['pendente', 'executando'].includes(pedidoAtual.status)) {
+    btn.classList.add('busy');
+    el.textContent = pedidoAtual.status === 'executando' ? 'planilha: gravando…' : 'planilha: pedido na fila';
+    el.title = 'O pedido é atendido na próxima sincronização do notebook (12h e 17h30) ou quando você rodar o atalho Sincronizar Excel.bat.';
+    return;
+  }
+  btn.classList.remove('busy');
+  if (!SYNC || !SYNC.ultima_sync) { el.textContent = 'planilha: sem sincronização'; return; }
+  const ativo = SYNC.heartbeat && (Date.now() - new Date(SYNC.heartbeat).getTime()) < 10 * 60000;
+  el.textContent = 'planilha: ' + tempoRel(SYNC.ultima_sync) + (ativo ? '' : ' · notebook offline');
+  el.title = (SYNC.mensagem || '') + '\nÚltima verificação do notebook ' + tempoRel(SYNC.heartbeat);
+}
+async function carregaSync() {
+  const [st, pd] = await Promise.all([
+    sb.from('sync_status').select('*').eq('id', 1).maybeSingle(),
+    sb.from('sync_pedidos').select('*').order('criado_em', { ascending: false }).limit(1),
+  ]);
+  SYNC = st.data || null;
+  pedidoAtual = (pd.data && pd.data[0]) || null;
+  pintaSync();
+}
+function iniciarSync() {
+  carregaSync();
+  if (syncCanal) return;
+  syncCanal = sb.channel('sync-rt')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_status' }, p => { SYNC = p.new; pintaSync(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_pedidos' }, p => {
+      if (!pedidoAtual || p.new.id === pedidoAtual.id || new Date(p.new.criado_em) >= new Date(pedidoAtual.criado_em)) pedidoAtual = p.new;
+      if (p.new.status === 'concluido' && p.eventType === 'UPDATE') toast('Planilha atualizada. ' + (p.new.mensagem || ''));
+      if (p.new.status === 'erro') toast('A sincronização falhou: ' + (p.new.mensagem || ''), { err: true });
+      pintaSync();
+    }).subscribe();
+  setInterval(() => { carregaSync(); }, 60000);
+}
+$('syncBtn').onclick = async () => {
+  const { data, error } = await sb.from('sync_pedidos').insert({ criado_por: USER.email }).select().single();
+  if (error) { toast('Não consegui pedir a sincronização: ' + error.message, { err: true }); return; }
+  pedidoAtual = data; pintaSync();
+  toast('Pedido registrado. Entra na próxima sincronização (12h e 17h30) ou quando você rodar o atalho.');
+};
+
+// ---------- API p/ chat e alertas ----------
+window.App = {
+  sb, get data() { return DATA; }, get user() { return USER; },
+  FIELDS, FMAP, LISTS, update, insert, openEditor, setView, toast, esc, BRL, fmtDate, today, daysBetween, label, logout, ACTIVE_STATUS,
+  onLoad: [], render
+};
 
 initAuth();
 })();

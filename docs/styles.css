@@ -113,3 +113,58 @@ tbody tr:hover{background:var(--panel2)}
 #toast.show{display:flex}
 #toast.err{border-color:var(--red)}
 @media(max-width:700px){body{padding:12px}input.search{width:100%}}
+
+/* Alertas e sincronização */
+.bellcount{background:var(--red);color:#fff;border-radius:20px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:4px;display:none}
+.bellcount.on{display:inline-block}
+.tabs .cnt{margin-left:6px;background:var(--red);color:#fff;display:none}
+.tabs .cnt.on{display:inline-block}
+.list.tall{max-height:66vh}
+.alerta{border-left:4px solid var(--amber)}
+.alerta.alto{border-left-color:var(--red)}
+.alerta.baixo{border-left-color:var(--cyan)}
+.alerta .h{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.alerta .tag{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut)}
+.acoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.cfg{display:flex;flex-direction:column;gap:10px;font-size:12.5px}
+.cfg .grupo{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel2)}
+.cfg .grupo > label:first-child{font-weight:700}
+.cfg label{display:flex;align-items:center;gap:8px;color:var(--txt);text-transform:none;font-size:12.5px;letter-spacing:0}
+.cfg .sub{margin-top:8px;display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;color:var(--mut)}
+.cfg input[type=number]{width:64px;padding:4px 6px}
+.cfg input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent)}
+#syncBtn.busy{opacity:.7;pointer-events:none}
+
+/* Tabela dinâmica */
+.tbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.tbar .search{width:280px}
+.chipsfiltro{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chipf{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 8px;font-size:11.5px;display:flex;gap:6px;align-items:center}
+.chipf b{font-weight:600}
+.chipf button{background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px;line-height:1;padding:0}
+.chipf button:hover{color:var(--red)}
+.tbcard{padding:0;overflow:hidden}
+.tbwrap{overflow:auto;max-height:calc(100vh - 230px)}
+table.tbgrid{border-collapse:separate;border-spacing:0;font-size:12.5px;width:max-content;min-width:100%}
+table.tbgrid th,table.tbgrid td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:7px 9px;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:top}
+table.tbgrid.compacta th,table.tbgrid.compacta td{padding:3px 8px;font-size:12px}
+table.tbgrid.quebra td{white-space:normal;word-break:break-word}
+table.tbgrid thead th{position:sticky;top:0;z-index:3;background:#141b2b;color:var(--mut);text-transform:uppercase;font-size:10.5px;letter-spacing:.4px;cursor:default;padding-right:24px}
+table.tbgrid thead th .ord{cursor:pointer}
+table.tbgrid thead th .fun{position:absolute;right:4px;top:5px;background:none;border:none;color:var(--mut);cursor:pointer;font-size:11px;padding:2px 4px;border-radius:4px}
+table.tbgrid thead th .fun:hover{background:var(--panel2);color:var(--txt)}
+table.tbgrid thead th .fun.on{color:var(--accent)}
+table.tbgrid th{position:relative}
+table.tbgrid tbody tr:hover td{background:var(--panel2)}
+table.tbgrid td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.tbgrid .fix1{position:sticky;left:0;z-index:2;background:var(--panel)}
+table.tbgrid thead .fix1{z-index:4;background:#141b2b}
+table.tbgrid tbody tr:hover .fix1{background:var(--panel2)}
+table.tbgrid tfoot td{position:sticky;bottom:0;background:#141b2b;font-weight:700;color:var(--txt);border-top:1px solid var(--line)}
+.pop{position:fixed;z-index:50;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.5);padding:10px;min-width:230px;max-width:320px;max-height:60vh;overflow:auto;font-size:12.5px}
+.pop .opts{display:flex;flex-direction:column;gap:4px;margin:8px 0;max-height:34vh;overflow:auto}
+.pop label{display:flex;gap:7px;align-items:center;color:var(--txt);text-transform:none;letter-spacing:0;font-size:12.5px;cursor:pointer}
+.pop .rodape{display:flex;gap:6px;justify-content:flex-end;border-top:1px solid var(--line);padding-top:8px}
+.pop input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
+.pop .faixa{display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center;margin:8px 0;color:var(--mut)}
+.pop .faixa input{width:100%}

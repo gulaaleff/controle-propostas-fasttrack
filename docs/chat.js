@@ -42,7 +42,7 @@ $('chatIn').addEventListener('keydown', e => {
 const AJUDA_CURTA = 'Oi! Eu altero e consulto as propostas por comando. Alguns exemplos:\n' +
   '• <b>marcar CCPR rollouts como ganho</b>\n• <b>perdido Tirol wa inventory por preço</b>\n• <b>valor de Vivara dfe: 108 mil</b>\n• <b>pendência de Antares datasphere: cobrar retorno do João</b>\n• <b>pendências</b> · <b>follow-ups</b> · <b>resumo</b>\nDigite <b>ajuda</b> para ver tudo.';
 const AJUDA = '<b>Consultas</b>\n' +
-  '• <b>resumo</b> — números gerais\n• <b>pendências</b> — atividades pendentes\n• <b>follow-ups</b> [dias] — entregues e sem retorno\n• <b>em elaboração</b> / <b>urgentes</b>\n• <b>buscar</b> termo — lista propostas\n• <b>abrir</b> termo — abre o formulário\n\n' +
+  '• <b>resumo</b> — números gerais\n• <b>alertas</b> — o que está atrasado ou vencendo\n• <b>pendências</b> — atividades pendentes\n• <b>follow-ups</b> [dias] — entregues e sem retorno\n• <b>em elaboração</b> / <b>urgentes</b>\n• <b>buscar</b> termo — lista propostas\n• <b>abrir</b> termo — abre o formulário\n\n' +
   '<b>Alterações</b> (sempre peço confirmação)\n' +
   '• <b>marcar</b> X <b>como</b> ganho | perdido | cancelado | revisão | em aberto\n' +
   '• <b>marcar</b> X <b>como</b> novo | em andamento | concluído | parado\n' +
@@ -52,7 +52,9 @@ const AJUDA = '<b>Consultas</b>\n' +
   '• <b>pendência</b> de X: texto · <b>limpar pendência</b> de X\n' +
   '• <b>obs</b> de X: texto (acrescenta) \n' +
   '• <b>&lt;campo&gt; de</b> X<b>:</b> valor — funciona para qualquer campo (valor, horas, comercial, hubspot, data prevista, módulos, consultores…)\n' +
-  '• <b>nova proposta:</b> Cliente / Projeto; comercial: Nome; valor: 80 mil; prioridade: alta\n\n' +
+  '• <b>lembrar de</b> X <b>em</b> 22/09: texto · <b>limpar lembrete de</b> X\n' +
+  '• <b>nova proposta:</b> Cliente / Projeto; comercial: Nome; valor: 80 mil; prioridade: alta\n' +
+  '• <b>sincronizar</b> — manda as alterações para a planilha no OneDrive\n\n' +
   'X é um pedaço do cliente e/ou projeto (ex.: "ccpr rollouts") ou <b>linha 331</b> da planilha. Se houver mais de uma, eu mostro as opções.';
 
 // ---------- Interpretação de valores ----------
@@ -114,6 +116,7 @@ const ALIAS = {
   demanda: 'demanda', 'tipo demanda': 'demanda', 'lost review': 'lost_review', motivo: 'lost_review', 'motivo perda': 'lost_review',
   pendencia: 'atividades', pendencias: 'atividades', atividade: 'atividades', atividades: 'atividades', 'atividades pendentes': 'atividades',
   obs: 'obs', observacao: 'obs', observacoes: 'obs',
+  lembrete: 'lembrete_em', 'lembrar em': 'lembrete_em', 'data do lembrete': 'lembrete_em', 'nota do lembrete': 'lembrete_nota',
   'data prevista': 'data_prevista', prazo: 'data_prevista', 'dt recebimento': 'dt_receb', recebimento: 'dt_receb', recebido: 'dt_receb',
   'dt inicio': 'dt_inicio', inicio: 'dt_inicio', 'dt prevista': 'dt_prevista', 'entrega v1': 'dt_v1', v1: 'dt_v1', 'dt v1': 'dt_v1',
   'entrega final': 'dt_final', 'dt final': 'dt_final', 'vfinal': 'dt_final', versoes: 'qtd_versao', versao: 'qtd_versao', 'qtd versao': 'qtd_versao', 'qtd versionamento': 'qtd_versao',
@@ -166,7 +169,8 @@ function confirmChange(d, ch, extraMsg) {
   bot(desc(d) + '\n' + linhas + (extraMsg ? '\n' + extraMsg : ''), [
     ['Confirmar', async () => {
       const r = await A.update(d.id, ch, 'chat');
-      if (r) bot('Gravado. A planilha recebe na próxima sincronização.', [['Desfazer', async () => { const u = await A.update(d.id, r.prev, 'chat'); if (u) bot('Desfeito.'); }], ['Abrir', () => A.openEditor(d.id)]]);
+      const soAlerta = Object.keys(ch).every(k => k.startsWith('lembrete_'));
+      if (r) bot(soAlerta ? 'Lembrete gravado. Ele vive só no site, não vai para a planilha.' : 'Gravado. A planilha recebe na próxima sincronização.', [['Desfazer', async () => { const u = await A.update(d.id, r.prev, 'chat'); if (u) bot('Desfeito.'); }], ['Abrir', () => A.openEditor(d.id)]]);
     }, true],
     ['Cancelar', () => bot('Ok, não alterei nada.')],
   ]);
@@ -199,6 +203,25 @@ function handle(texto) {
     const mes = A.today().slice(0, 7);
     const gm = g.filter(d => (d.data_ganho_perdido || '').slice(0, 7) === mes), rm = D.filter(d => (d.dt_receb || '').slice(0, 7) === mes);
     return bot('<b>Resumo</b>\n• ' + D.length + ' propostas no total\n• Em negociação: ' + ab.length + ' (' + A.BRL(s(ab)) + ')\n• Em elaboração: ' + el.length + ' (' + el.filter(d => ['Urgente', 'Alta'].includes(d.prioridade)).length + ' urgentes/altas)\n• Ganhas: ' + g.length + ' (' + A.BRL(s(g)) + ') · Perdidas: ' + p.length + ' (' + A.BRL(s(p)) + ')\n• Este mês: ' + rm.length + ' recebidas, ' + gm.length + ' ganhas (' + A.BRL(s(gm)) + ')');
+  }
+  if (/^(alertas?|meus alertas|o que (esta|ta) atrasado)$/.test(n)) {
+    if (!window.Alertas) return bot('O módulo de alertas ainda está carregando.');
+    const al = window.Alertas.calcular();
+    if (!al.length) return bot('Nenhum alerta aberto.');
+    return bot('Alertas abertos (' + al.length + '):\n' + al.slice(0, 12).map(a => '• ' + desc(a.d) + '\n   <b>' + esc(a.titulo) + '</b>' + (a.detalhe ? ' — ' + esc(String(a.detalhe).split('\n')[0]) : '')).join('\n') + (al.length > 12 ? '\n…e mais ' + (al.length - 12) + '. Veja a aba Alertas.' : ''),
+      [['Abrir aba Alertas', () => A.setView('alertas')]]);
+  }
+  if ((m = t.match(/^(?:lembrar|lembrete|me lembra(?:r)?)\s+(?:de\s+|da\s+|do\s+)?(.+?)\s+(?:em|no dia|dia|para|pra)\s+([^:]+?)\s*(?::\s*(.+))?$/i))) {
+    const data = parseDate(m[2]);
+    if (data === undefined) return bot('Não entendi a data "' + esc(m[2]) + '". Use dd/mm, dd/mm/aaaa, hoje, amanhã ou "em 3 dias".');
+    return withTarget(m[1], d => confirmChange(d, { lembrete_em: data, lembrete_nota: (m[3] || d.lembrete_nota || '').trim() || null }));
+  }
+  if ((m = n.match(/^(?:limpar|remover|apagar)\s+(?:o\s+)?lembrete\s+(?:de |da |do )?(.+)$/))) {
+    return withTarget(m[1], d => confirmChange(d, { lembrete_em: null, lembrete_nota: null }));
+  }
+  if (/^(sincronizar|sincroniza|atualizar planilha|manda pro excel|mandar para o excel)$/.test(n)) {
+    document.getElementById('syncBtn').click();
+    return bot('Pedi a sincronização. A planilha é atualizada na próxima rodada do notebook (12h e 17h30) ou quando você rodar o atalho.');
   }
   if (/^(pendencias|pendentes|o que (esta|ta) pendente|atividades pendentes)$/.test(n)) {
     return listResult(A.data.filter(d => d.atividades && d.status !== 'Cancelado'), 'Atividades pendentes', d => d.atividades);
